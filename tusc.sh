@@ -78,18 +78,25 @@ USAGE
 }
 
 # get/set tus config
-tus-config() # $1 = key, $2 = value
-{
-  TUSFILE=`realpath ~/.tus.json`
-  [[ -f $TUSFILE ]] || echo '{}' > $TUSFILE
-  TUSJSON=`cat $TUSFILE`
+tus-config() {
+  TUSFILE=`realpath ~/.tus.conf`
+  [[ -f $TUSFILE ]] || touch $TUSFILE
 
   if [[ $# -eq 0 ]]; then
-    echo $TUSJSON
+    cat $TUSFILE
   elif [[ $# -eq 1 ]]; then
-    echo $TUSJSON | jq -r "$1"
+    entry_exists=``
+    if grep -q "$1" $TUSFILE; then
+      grep "$1" $TUSFILE | awk -F '=' '{print $2;}'
+    else
+      echo "null"
+    fi
   else
-    echo $TUSJSON | jq "$1=\"$2\"" > $TUSFILE
+    if grep -q "$1" $TUSFILE; then
+      sed -i "s#^$1=.*"'$'"#$1=$2#g" $TUSFILE
+    else
+      echo "$1=$2" >> $TUSFILE
+    fi
   fi
 }
 
@@ -199,16 +206,16 @@ FILE=`realpath $FILE`  NAME=`basename $FILE`  SIZE=`stat -c %s $FILE`  MTIME=`st
 HEADER=`mktemp -t tus.XXXXXXXXXX`
 
 # calc &/or cache key and checksum
-KEY=`tus-config ".[\"$FILE:$MTIME\"].$SUMALGO?"`
+KEY=`tus-config "$FILE:$MTIME.$SUMALGO"`
 [[ "null" == "$KEY" ]] && [[ $DEBUG ]] && comment "> ${SUMALGO}sum $FILE"
 [[ "null" == "$KEY" ]] && spinner && read -r KEY _ <<< `${SUMALGO}sum $FILE` && no-spinner
-tus-config ".[\"$FILE:$MTIME\"].$SUMALGO" "$KEY"
+tus-config "$FILE:$MTIME.$SUMALGO" "$KEY"
 CHKSUM="$SUMALGO $(echo -n $KEY | base64 -w 0)"
 
 [[ $DEBUG ]] && info "HOST  : $HOST\nHEADER: $HEADER\nFILE  : $NAME\nSIZE  : $SIZE\nKEY   : $KEY\nCHKSUM: $CHKSUM"
 
 # head request
-TUSURL=`tus-config ".[\"$KEY\"].location?"`
+TUSURL=`tus-config "$KEY.location"`
 [[ $LOCATE ]] && info "URL: $TUSURL" && [[ $TUSURL != "null" ]]; [[ $LOCATE ]] && exit $?
 [[ $TUSURL ]] && [[ "null" != "$TUSURL" ]] && request "--head $TUSURL"
 
@@ -233,7 +240,7 @@ else
   [[ $TUSURL ]] || error "Tus server replied with empty location. Try changing --base-path param." 1
 
   # save location config
-  tus-config ".[\"$KEY\"].location" "$TUSURL"
+  tus-config "$KEY.location" "$TUSURL"
 fi
 
 # patch request
