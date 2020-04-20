@@ -16,8 +16,6 @@ If anything goes wrong, you can rerun the command to resume upload from where it
 
 ```sh
 # Requirements:
-# jq
-sudo apt install jq -y
 
 curl -sSLo ~/tusc curl https://github.com/adhocore/tusc.sh/releases/latest/download/tusc
 # for global binary
